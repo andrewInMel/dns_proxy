@@ -4,48 +4,148 @@
 #include<assert.h>
 #include<string.h>
 #include<time.h>
+#include <arpa/inet.h>
+
+/* data structure to store information */
+typedef struct Question{
+  char *domain_name;
+  int qtype;
+  int qclass;
+}Question_t;
+
+typedef struct Answer{
+  char *domain_name;
+  int ancount;
+  int type;
+  int class;
+  int ttl;
+  int rdlength;
+  char *rdata;
+}Answer_t;
 
 /* defien constant */
 #define MESSAGE_SIZE_FLAG 2
 #define TIME_FORMAT "%FT%T%z"
 #define MAX_TIME_SIZE 30
 #define HEADER_SIZE 12
-#define QTYPE 28
+#define AAAA_QTYPE 28
 #define DOT_SIZE 1
+#define BYTE_SIZE 8
+#define STANDARD_SECTION_SIZE 2
 
+/* function prototype */
 unsigned char* read_dns_message(unsigned int);
-int parse_request(unsigned char *, char **);
-char* generate_format_time(char *);
-void write_request_log(int, char *, FILE *);
-char* doamin_name_extraction(unsigned char **);
+char* doamin_name_extraction(unsigned char *, unsigned char **);
+Question_t* parse_request(unsigned char *);
+Answer_t* parse_response(unsigned char *);
+void generate_format_time(char *);
+void write_request_log(Question_t *, FILE *);
+void write_response_log(Answer_t *, FILE *);
+void free_question_t(Question_t *);
+void free_answer_t(Answer_t *);
+Question_t* create_question_info();
+Answer_t* create_answer_info();
 
 int
 main(int argc, char *argv[]){
   unsigned char *dns_message;
-  char *domain_name;
-  int valid = 123;
   FILE *log_file;
+  Question_t *question_info;
+  Answer_t *answer_info;
   /* create a log file for read and write */
   log_file = fopen("dns_svr.log", "w+");
-  /* phase1: read from stdin */
+  /* read message from file descriptor*/
   dns_message = read_dns_message(STDIN_FILENO);
-  /* phase DNS message */
-  if(strcmp(argv[1], "request") == 0 ){
-    valid = parse_request(dns_message, &domain_name);
-    write_request_log(valid, domain_name, log_file);
+  /* extract infomation & write log entry */
+  if(strcmp(argv[1], "request") == 0){
+    question_info = parse_request(dns_message);
+    write_request_log(question_info, log_file);
+    /* free the stored infomations */
+    free_question_t(question_info);
+  }else if(strcmp(argv[1], "response") == 0){
+    answer_info = parse_response(dns_message);
+    write_response_log(answer_info, log_file);
+    /* free the stored infomations */
+    free_answer_t(answer_info);
   }
-  // }else if(strcmp(argv[1], "response") == 0){
-  //
-  // }
-
   /* close the log file */
   fclose(log_file);
   /* free the memory */
   free(dns_message);
-  free(domain_name);
   dns_message = NULL;
-  domain_name = NULL;
   return 0;
+}
+
+void
+write_response_log(Answer_t* answer_info, FILE *log_file){
+  char formatted_time[MAX_TIME_SIZE];
+  /* write log input at current time */
+  generate_format_time(formatted_time);
+  if(answer_info->ancount > 0 && answer_info->type == AAAA_QTYPE){
+    fprintf(log_file, "%s %s is at %s\n", formatted_time,
+            answer_info->domain_name, answer_info->rdata);
+  }
+}
+
+/* parse DNS request message */
+Question_t*
+parse_request(unsigned char *dns_message){
+  Question_t *question_info = NULL;
+  unsigned char *request_ptr = NULL;
+  /* initialise <question_info> */
+  question_info = create_question_info();
+  /* extract domain name */
+  question_info->domain_name = doamin_name_extraction(dns_message, &request_ptr);
+  /* move the tracking pointer to QTYPE section and extract QTYPE */
+  request_ptr++;
+  question_info->qtype = (request_ptr[0] << BYTE_SIZE) | request_ptr[1];
+  /* move the tracking pointer to QTYPE section and extract QTYPE */
+  request_ptr += STANDARD_SECTION_SIZE;
+  question_info->qclass = (request_ptr[0] << BYTE_SIZE) | request_ptr[1];
+  /* return extracted infomation */
+  return question_info;
+}
+
+/* parse DNS response message */
+Answer_t*
+parse_response(unsigned char *dns_message){
+  Answer_t *answer_info = NULL;
+  unsigned char *response_ptr = NULL;
+  /* initialise <answer_info> */
+  answer_info = create_answer_info();
+  /* move track pointer to ANCOUNT section, then extract ancount flag value */
+  response_ptr = dns_message + MESSAGE_SIZE_FLAG + STANDARD_SECTION_SIZE * 3;
+  answer_info->ancount = (response_ptr[0] << BYTE_SIZE) | response_ptr[1];
+  /* only parse the response message if there is an answer in it */
+  if(answer_info->ancount > 0){
+    /* extract domain name */
+    answer_info->domain_name = doamin_name_extraction(dns_message, &response_ptr);
+    /* move <response_ptr> to answer segment */
+    response_ptr += STANDARD_SECTION_SIZE * 2 + 1;
+    /* move to TYPE section & extract TYPE value */
+    response_ptr += STANDARD_SECTION_SIZE;
+    answer_info->type = (response_ptr[0] << BYTE_SIZE) | response_ptr[1];
+    if(answer_info->type == AAAA_QTYPE){
+      /* move to CLASS section & extract CLASS value */
+      response_ptr += STANDARD_SECTION_SIZE;
+      answer_info->class = (response_ptr[0] << BYTE_SIZE) | response_ptr[1];
+      /* move to TTL section & extract TTL value */
+      response_ptr += STANDARD_SECTION_SIZE;
+      answer_info->ttl = (response_ptr[0] << BYTE_SIZE * 3)
+                          | (response_ptr[1] << BYTE_SIZE * 2)
+                          | (response_ptr[2] << BYTE_SIZE)
+                          | response_ptr[3];
+      /* move to RDLENGTH section & extract RDLENGTH value */
+      response_ptr += STANDARD_SECTION_SIZE * 2;
+      answer_info->rdlength = (response_ptr[0] << BYTE_SIZE) | response_ptr[1];
+      /* move to IP address section & extract IP address */
+      response_ptr += STANDARD_SECTION_SIZE;
+      answer_info->rdata = (char *)malloc(sizeof(char) * INET6_ADDRSTRLEN);
+      inet_ntop(AF_INET6, response_ptr, answer_info->rdata, INET6_ADDRSTRLEN);
+    }
+  }
+  /* return extracted information */
+  return answer_info;
 }
 
 /* read DNS message from socket */
@@ -61,7 +161,7 @@ read_dns_message(unsigned int fd){
     exit(EXIT_FAILURE);
   }
   /* convert binary data of message size flag to decimal value */
-  message_size = ((dns_message[0] << 8) | dns_message[1]);
+  message_size = ((dns_message[0] << BYTE_SIZE) | dns_message[1]);
   /* read the rest of dns message */
   dns_message = (unsigned char*)realloc(dns_message,
                  sizeof(unsigned char) * (message_size + MESSAGE_SIZE_FLAG));
@@ -73,53 +173,35 @@ read_dns_message(unsigned int fd){
   return dns_message;
 }
 
-/* parse DNS request message */
-int
-parse_request(unsigned char *dns_message, char **domain_name){
-  unsigned char *question_ptr;
-  unsigned int section_size = 0;
-  int a = 0;
-  /* skip header and points to the beginning of question part */
-  question_ptr = dns_message + HEADER_SIZE + MESSAGE_SIZE_FLAG;
-  /* extract domain name */
-  *domain_name = doamin_name_extraction(&question_ptr);
-  /* move pointer to QTYPE segment & verify if it is a IPv6 request */
-  question_ptr += 1;
-  if(a = ((question_ptr[0] << 8) | question_ptr[1]) != QTYPE){
-    return 1;
-  }else{
-    return 0;
-  }
-}
-
-/* extract doamin name */
+/* extract doamin name from a well-formed DNS message */
 char*
-doamin_name_extraction(unsigned char **question_ptr){
+doamin_name_extraction(unsigned char *dns_message, unsigned char **track_ptr){
   char *domain_name = NULL;
   unsigned int index = 0, section_length = 0;
+  /* skip header and points to the beginning of question part */
+  *track_ptr = dns_message + MESSAGE_SIZE_FLAG + HEADER_SIZE;
   /* loop though the QNAME segement to extract damain name */
-  while(*question_ptr[0] != 0){
+  while(*track_ptr[0] != 0){
     /* once finished read one section of domain name,
      * get the size of next section.
      */
     if(section_length == 0 ){
-      section_length = *question_ptr[0];
+      section_length = *track_ptr[0];
       /* realloc enough memory to store characters and dot between sections */
       domain_name = (char *)realloc(domain_name,
                               sizeof(char)*(section_length + index + DOT_SIZE));
       assert(domain_name);
       /* move to next byte */
-      *question_ptr += 1;
+      (*track_ptr)++;
       /* add a dot charater between two sections */
       if(index != 0){
         domain_name[index] = '.';
         index++;
       }
     }
-
     /* assemble domain name */
-    domain_name[index] = *question_ptr[0];
-    *question_ptr += 1;
+    domain_name[index] = *track_ptr[0];
+    (*track_ptr)++;
     section_length--;
     index++;
   }
@@ -133,22 +215,21 @@ doamin_name_extraction(unsigned char **question_ptr){
 
 /* write to log file */
 void
-write_request_log(int valid, char* domain_name, FILE *log_file){
+write_request_log(Question_t* question_info, FILE *log_file){
   char formatted_time[MAX_TIME_SIZE];
   /* write log input at current time */
   generate_format_time(formatted_time);
-  fprintf(log_file, "%s requested %s\n", formatted_time, domain_name);
+  fprintf(log_file, "%s requested %s\n", formatted_time, question_info->domain_name);
   fflush(log_file);
   /* if the request if not a type <AAAA> request, output following log */
-//  printf("\n\n%d\n\n", valid);
-  if(valid){
+  if(question_info->qtype != AAAA_QTYPE){
     fprintf(log_file, "%s unimplemented request\n", formatted_time);
     fflush(log_file);
   }
 }
 
 /* generate format time */
-char*
+void
 generate_format_time(char *formatted_time){
   time_t current;
   struct tm *tm_time;
@@ -157,4 +238,56 @@ generate_format_time(char *formatted_time){
   tm_time = localtime(&current);
   /* generet required format of time */
   strftime(formatted_time,MAX_TIME_SIZE,TIME_FORMAT, tm_time);
+}
+
+/* create & initialise Question_t variable */
+Question_t*
+create_question_info(){
+  Question_t* question_info;
+    /* initialise <question_info> */
+  question_info = (Question_t *)malloc(sizeof(Question_t));
+  assert(question_info);
+  question_info->domain_name = NULL;
+  question_info->qtype = 0;
+  question_info->qclass = 0;
+  /* return the struct */
+  return question_info;
+}
+
+/* create & initialise Answer_t variable */
+Answer_t*
+create_answer_info(){
+  Answer_t* answer_info;
+  /* initialise <question_info> */
+  answer_info = (Answer_t *)malloc(sizeof(Answer_t));
+  assert(answer_info);
+  answer_info->domain_name = NULL;
+  answer_info->ancount = 0;
+  answer_info->type = 0;
+  answer_info->class = 0;
+  answer_info->ttl = 0;
+  answer_info->rdlength = 0;
+  answer_info->rdata = NULL;
+    /* return the struct */
+  return answer_info;
+}
+
+/* free Question_t structure data */
+void
+free_question_t(Question_t *node){
+  free(node->domain_name);
+  node->domain_name = NULL;
+  free(node);
+  node = NULL;
+}
+
+/* free Answer_t structure data */
+void
+free_answer_t(Answer_t *node){
+  free(node->domain_name);
+  node->domain_name = NULL;
+  free(node->rdata);
+  node->rdata = NULL;
+  free(node);
+  node = NULL;
 }
