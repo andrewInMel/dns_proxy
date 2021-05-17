@@ -76,17 +76,6 @@ main(int argc, char *argv[]){
   return 0;
 }
 
-void
-write_response_log(Answer_t* answer_info, FILE *log_file){
-  char formatted_time[MAX_TIME_SIZE];
-  /* write log input at current time */
-  generate_format_time(formatted_time);
-  if(answer_info->ancount > 0 && answer_info->type == AAAA_QTYPE){
-    fprintf(log_file, "%s %s is at %s\n", formatted_time,
-            answer_info->domain_name, answer_info->rdata);
-  }
-}
-
 /* parse DNS request message */
 Question_t*
 parse_request(unsigned char *dns_message){
@@ -213,18 +202,28 @@ doamin_name_extraction(unsigned char *dns_message, unsigned char **track_ptr){
   return domain_name;
 }
 
-/* write to log file */
+/* write request infomation to log file */
 void
 write_request_log(Question_t* question_info, FILE *log_file){
   char formatted_time[MAX_TIME_SIZE];
   /* write log input at current time */
   generate_format_time(formatted_time);
   fprintf(log_file, "%s requested %s\n", formatted_time, question_info->domain_name);
-  fflush(log_file);
   /* if the request if not a type <AAAA> request, output following log */
   if(question_info->qtype != AAAA_QTYPE){
     fprintf(log_file, "%s unimplemented request\n", formatted_time);
-    fflush(log_file);
+  }
+}
+
+/* write response infomation to log file */
+void
+write_response_log(Answer_t* answer_info, FILE *log_file){
+  char formatted_time[MAX_TIME_SIZE];
+  /* write log input at current time */
+  generate_format_time(formatted_time);
+  if(answer_info->ancount > 0 && answer_info->type == AAAA_QTYPE){
+    fprintf(log_file, "%s %s is at %s\n", formatted_time,
+            answer_info->domain_name, answer_info->rdata);
   }
 }
 
