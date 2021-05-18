@@ -57,7 +57,7 @@ main(int argc, char *argv[]){
   /* read message from file descriptor*/
   dns_message = read_dns_message(STDIN_FILENO);
   /* extract infomation & write log entry */
-  if(strcmp(argv[1], "request") == 0){
+  if(strcmp(argv[1], "query") == 0){
     question_info = parse_request(dns_message);
     write_request_log(question_info, log_file);
     /* free the stored infomations */
@@ -209,9 +209,11 @@ write_request_log(Question_t* question_info, FILE *log_file){
   /* write log input at current time */
   generate_format_time(formatted_time);
   fprintf(log_file, "%s requested %s\n", formatted_time, question_info->domain_name);
+  fflush(log_file);
   /* if the request if not a type <AAAA> request, output following log */
   if(question_info->qtype != AAAA_QTYPE){
     fprintf(log_file, "%s unimplemented request\n", formatted_time);
+    fflush(log_file);
   }
 }
 
@@ -224,6 +226,7 @@ write_response_log(Answer_t* answer_info, FILE *log_file){
   if(answer_info->ancount > 0 && answer_info->type == AAAA_QTYPE){
     fprintf(log_file, "%s %s is at %s\n", formatted_time,
             answer_info->domain_name, answer_info->rdata);
+    fflush(log_file);
   }
 }
 
