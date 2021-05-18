@@ -63,25 +63,33 @@ parse_response(unsigned char *dns_message){
 
 /* read DNS message from socket */
 unsigned char*
-read_dns_message(unsigned int fd){
+read_dns_message(int fd, int *message_len){
   unsigned char *dns_message;
-  int message_size = 0;
-  /* read message size flag */
+  int left_size = 0, read_size = 0;
+  int i = 0;
+  /* allocate memory & read message size flag */
   dns_message = (unsigned char*)malloc(sizeof(unsigned char) * MESSAGE_SIZE_FLAG);
   assert(dns_message);
-  if(read(fd, dns_message, MESSAGE_SIZE_FLAG) == -1){
-    printf("fail to message size flag from socket");
-    exit(EXIT_FAILURE);
+  for(i = 2; i > 0; i-= read_size){
+    if((read_size = read(fd, dns_message + read_size, MESSAGE_SIZE_FLAG - read_size)) == -1){
+      perror("fail to read message size flag from socket");
+      exit(EXIT_FAILURE);
+    }
   }
   /* convert binary data of message size flag to decimal value */
-  message_size = ((dns_message[0] << BYTE_SIZE) | dns_message[1]);
-  /* read the rest of dns message */
-  dns_message = (unsigned char*)realloc(dns_message,
-                 sizeof(unsigned char) * (message_size + MESSAGE_SIZE_FLAG));
+  left_size = ((dns_message[0] << BYTE_SIZE) | dns_message[1]);
+  *message_len = left_size + MESSAGE_SIZE_FLAG;
+  /* allocate enough memory, then read the rest of dns message */
+  dns_message = (unsigned char*)realloc(dns_message, sizeof(unsigned char) * (*message_len));
   assert(dns_message);
-  if(read(fd, dns_message + MESSAGE_SIZE_FLAG, message_size) == -1){
-    printf("fail to dns message from socket");
-    exit(EXIT_FAILURE);
+  /* restore read size before while loop */
+  read_size = 0;
+  while(left_size > 0){
+    if((read_size = read(fd, dns_message + MESSAGE_SIZE_FLAG + read_size, left_size)) == -1){
+      perror("fail to read dns message from socket");
+      exit(EXIT_FAILURE);
+    }
+    left_size -= read_size;
   }
   return dns_message;
 }

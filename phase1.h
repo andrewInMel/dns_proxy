@@ -20,7 +20,7 @@
 #define STANDARD_SECTION_SIZE 2
 
 /* function prototype */
-unsigned char* read_dns_message(unsigned int);
+unsigned char* read_dns_message(int, int *);
 char* doamin_name_extraction(unsigned char *, unsigned char **);
 Question_t* parse_request(unsigned char *);
 Answer_t* parse_response(unsigned char *);
