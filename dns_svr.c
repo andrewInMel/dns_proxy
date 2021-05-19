@@ -13,6 +13,7 @@ int create_server_socket(const int);
 void live_dns_svr(FILE *, char**);
 unsigned char* error_handler(unsigned char *);
 unsigned char* query_upstream_svr(unsigned char *, int, char **, int *);
+void response_to_client(unsigned char *, Question_t *, int, FILE *, char **, int);
 
 int
 main(int argc, char *argv[]){
@@ -30,11 +31,10 @@ main(int argc, char *argv[]){
 /* live DNS server */
 void
 live_dns_svr(FILE *log_file, char **argv){
-  int client_size, new_socket, query_len, response_len;
+  int client_size, new_socket, query_len;
   struct sockaddr_in client;
-  unsigned char *query_msg, *response_msg, *to_client_message;
+  unsigned char *query_msg;
   Question_t *question_info;
-  Answer_t *answer_info;
   /* create a socket, bind to port 8053, & start listen */
   int socket_svr;
   socket_svr = create_server_socket(PORT_LISTEN_ON);
@@ -51,43 +51,48 @@ live_dns_svr(FILE *log_file, char **argv){
       perror("accept");
 			exit(EXIT_FAILURE);
     }
-    /* read, store & parse query message, then log request entry */
+    /* read, store & parse query message, then log query entry */
     query_msg = read_dns_message(new_socket, &query_len);
     question_info = parse_request(query_msg);
     write_request_log(question_info, log_file);
-    /* reponse to query base on the infomation within <question_info> */
-    if(question_info->qtype != AAAA_QTYPE){
-      /* non AAAA query, sent back to client with RCODE 4, then log the entry */
-      to_client_message = error_handler(query_msg);
-      if(write(new_socket, to_client_message, query_len) < 0){
-        perror("fail to write message to client");
-        exit(EXIT_FAILURE);
-      }
-      /* free memory */
-      free_question_t(question_info);
-      free(query_msg);
-      /* close the socket */
-      close(new_socket);
-    }else{
-      /* forward query to upstream server, and return the reponse message.
-       * then, parse the response and write log entries based on <answer_info>.
-       */
-      response_msg = query_upstream_svr(query_msg, query_len, argv, &response_len);
-      answer_info = parse_response(response_msg);
-      write_response_log(answer_info, log_file);
-      /* sent the response back to client. */
-      if(write(new_socket, response_msg, response_len) < 0){
-        perror("fail to write message to client");
-        exit(EXIT_FAILURE);
-      }
-      /* free memory */
-      free_answer_t(answer_info);
-      free_question_t(question_info);
-      free(query_msg);
-      free(response_msg);
-      /* close the socket */
-      close(new_socket);
+    /* reponse to query */
+    response_to_client(query_msg, question_info, new_socket,
+                       log_file, argv, query_len);
+    /* close the socket then free query related memory */
+    close(new_socket);
+    free_question_t(question_info);
+    free(query_msg);
+  }
+}
+
+void
+response_to_client(unsigned char *query_msg, Question_t *question_info,
+                   int new_socket, FILE *log_file, char **argv, int query_len){
+  int response_len;
+  Answer_t *answer_info;
+  unsigned char *to_client_message, *response_msg;
+  if(question_info->qtype != AAAA_QTYPE){
+    /* non AAAA query, sent back to client with RCODE 4, then log the entry */
+    to_client_message = error_handler(query_msg);
+    if(write(new_socket, to_client_message, query_len) < 0){
+      perror("fail to write message to client");
+      exit(EXIT_FAILURE);
     }
+  }else{
+    /* forward query to upstream server, and return the reponse message.
+     * then, parse the response and write log entries based on <answer_info>.
+     */
+    response_msg = query_upstream_svr(query_msg, query_len, argv, &response_len);
+    answer_info = parse_response(response_msg);
+    write_response_log(answer_info, log_file);
+    /* sent the response back to client. */
+    if(write(new_socket, response_msg, response_len) < 0){
+      perror("fail to write message to client");
+      exit(EXIT_FAILURE);
+    }
+    /* free reponse related memory */
+    free_answer_t(answer_info);
+    free(response_msg);
   }
 }
 
@@ -177,12 +182,3 @@ create_server_socket(const int port) {
 	}
 	return sockfd;
 }
-
-
-/* debug printf code */
-//    printf("%s --- %d --- %d\n", question_info->domain_name, question_info->qtype, question_info->qclass);
-
-// for(int i = 0 ; i < 54; i += 2){
-//   printf("%02x %02x ", query_msg[i], query_msg[i+1]);
-// }
-// printf("\n");
