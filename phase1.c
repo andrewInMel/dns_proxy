@@ -71,7 +71,8 @@ read_dns_message(int fd, int *message_len){
   dns_message = (unsigned char*)malloc(sizeof(unsigned char) * MESSAGE_SIZE_FLAG);
   assert(dns_message);
   for(i = 2; i > 0; i-= read_size){
-    if((read_size = read(fd, dns_message + read_size, MESSAGE_SIZE_FLAG - read_size)) == -1){
+    if((read_size = read(fd, dns_message + read_size, MESSAGE_SIZE_FLAG
+                                                      - read_size)) == -1){
       perror("fail to read message size flag from socket");
       exit(EXIT_FAILURE);
     }
@@ -80,12 +81,14 @@ read_dns_message(int fd, int *message_len){
   left_size = ((dns_message[0] << BYTE_SIZE) | dns_message[1]);
   *message_len = left_size + MESSAGE_SIZE_FLAG;
   /* allocate enough memory, then read the rest of dns message */
-  dns_message = (unsigned char*)realloc(dns_message, sizeof(unsigned char) * (*message_len));
+  dns_message = (unsigned char*)realloc(dns_message, sizeof(unsigned char)
+                                                     * (*message_len));
   assert(dns_message);
   /* restore read size before while loop */
   read_size = 0;
   while(left_size > 0){
-    if((read_size = read(fd, dns_message + MESSAGE_SIZE_FLAG + read_size, left_size)) == -1){
+    if((read_size = read(fd, dns_message + MESSAGE_SIZE_FLAG
+                                         + read_size, left_size)) == -1){
       perror("fail to read dns message from socket");
       exit(EXIT_FAILURE);
     }
@@ -140,7 +143,8 @@ write_request_log(Question_t* question_info, FILE *log_file){
   char formatted_time[MAX_TIME_SIZE];
   /* write log input at current time */
   generate_format_time(formatted_time);
-  fprintf(log_file, "%s requested %s\n", formatted_time, question_info->domain_name);
+  fprintf(log_file, "%s requested %s\n", formatted_time,
+                                         question_info->domain_name);
   fflush(log_file);
   /* if the request if not a type <AAAA> request, output following log */
   if(question_info->qtype != AAAA_QTYPE){
