@@ -66,13 +66,12 @@ unsigned char*
 read_dns_message(int fd, int *message_len){
   unsigned char *dns_message;
   int left_size = 0, read_size = 0;
-  int i = 0;
+  int i = 0, total_read = 0;
   /* allocate memory & read message size flag */
   dns_message = (unsigned char*)malloc(sizeof(unsigned char) * MESSAGE_SIZE_FLAG);
   assert(dns_message);
-  for(i = 2; i > 0; i-= read_size){
-    if((read_size = read(fd, dns_message + read_size, MESSAGE_SIZE_FLAG
-                                                      - read_size)) == -1){
+  for(i = MESSAGE_SIZE_FLAG; i > 0; i-= read_size){
+    if((read_size = read(fd, dns_message + read_size, i) == -1){
       perror("fail to read message size flag from socket");
       exit(EXIT_FAILURE);
     }
@@ -88,11 +87,12 @@ read_dns_message(int fd, int *message_len){
   read_size = 0;
   while(left_size > 0){
     if((read_size = read(fd, dns_message + MESSAGE_SIZE_FLAG
-                                         + read_size, left_size)) == -1){
+                                         + total_read, left_size)) == -1){
       perror("fail to read dns message from socket");
       exit(EXIT_FAILURE);
     }
     left_size -= read_size;
+    total_read += read_size;
   }
   return dns_message;
 }
