@@ -3,6 +3,7 @@
 
 /* library included */
 #include<stdlib.h>
+#include<stdio.h>
 #include<assert.h>
 
 /* data structure to store information */
@@ -21,6 +22,12 @@ typedef struct Answer{
   int rdlength;
   char *rdata;
 }Answer_t;
+
+typedef struct Handler{
+  int theard_sock;
+  char **up_stream_server;
+  FILE *output_file;
+}Handler_t;
 
 /* function prototype */
 void free_question_t(Question_t *);

@@ -4,6 +4,7 @@
 #include<arpa/inet.h>
 #include<sys/socket.h>
 #include<netinet/in.h>
+#include<pthread.h>
 
 #define PORT_LISTEN_ON 8053
 #define QUEUE_SIZE 5
@@ -14,6 +15,7 @@ void live_dns_svr(FILE *, char**);
 unsigned char* error_handler(unsigned char *);
 unsigned char* query_upstream_svr(unsigned char *, int, char **, int *);
 void response_to_client(unsigned char *, Question_t *, int, FILE *, char **, int);
+void* connection_handler(void *);
 
 int
 main(int argc, char *argv[]){
@@ -31,10 +33,8 @@ main(int argc, char *argv[]){
 /* live DNS server */
 void
 live_dns_svr(FILE *log_file, char **argv){
-  int client_size, new_socket, query_len;
+  int client_size, new_socket;
   struct sockaddr_in client;
-  unsigned char *query_msg;
-  Question_t *question_info;
   /* create a socket, bind to port 8053, & start listen */
   int socket_svr;
   socket_svr = create_server_socket(PORT_LISTEN_ON);
@@ -45,24 +45,54 @@ live_dns_svr(FILE *log_file, char **argv){
   /* Live server: running the server within an infinite loop */
   client_size = sizeof(client);
   while(1){
+    pthread_t thread;
+    Handler_t *handler_arg;
     /* accept connection */
     if((new_socket = accept(socket_svr, (struct sockaddr *)&client,
                             (socklen_t *)&client_size)) < 0){
       perror("accept");
 			exit(EXIT_FAILURE);
     }
-    /* read, store & parse query message, then log query entry */
-    query_msg = read_dns_message(new_socket, &query_len);
-    question_info = parse_request(query_msg);
-    write_request_log(question_info, log_file);
-    /* reponse to query */
-    response_to_client(query_msg, question_info, new_socket,
-                       log_file, argv, query_len);
-    /* close the socket then free query related memory */
-    close(new_socket);
-    free_question_t(question_info);
-    free(query_msg);
+    /* initialise handler's arg */
+    handler_arg = (Handler_t *)malloc(sizeof(Handler_t));
+    assert(handler_arg);
+    handler_arg->theard_sock = new_socket;
+    handler_arg->up_stream_server= argv;
+    handler_arg->output_file = log_file;
+    /* assign a new thread to handle new incoming query */
+    if( pthread_create( &thread , NULL ,  connection_handler , (void*) handler_arg) < 0)
+		{
+			perror("could not create thread");
+			exit(EXIT_FAILURE);
+		}
+    pthread_join(thread, NULL); 
   }
+}
+
+/* thread handler */
+void *
+connection_handler(void *ptr){
+  int query_len;
+  unsigned char *query_msg;
+  Question_t *question_info;
+  Handler_t *handler_arg;
+  handler_arg = (Handler_t *) ptr;
+	/* Get the socket descriptor */
+	int sock = handler_arg->theard_sock;
+  /* read, store & parse query message, then log query entry */
+  query_msg = read_dns_message(sock, &query_len);    
+  question_info = parse_request(query_msg);
+  write_request_log(question_info, handler_arg->output_file);
+  /* reponse to query */
+  response_to_client(query_msg, question_info, sock,
+                       handler_arg->output_file, handler_arg->up_stream_server, query_len);
+  /* close the connection & free memory */
+  close(sock);
+  free_question_t(question_info);
+  free(query_msg);
+  free(handler_arg);
+	/* exit thread */
+	pthread_exit(NULL);
 }
 
 void
@@ -150,7 +180,6 @@ error_handler(unsigned char *query_msg) {
 }
 
 /*********************************************************
- * This function is from practice 9 sulotion: server-1.3 *
  * Reference: Beej's networking guide, man pages         *
  *********************************************************/
 /* Create and return a socket bound to the given port */

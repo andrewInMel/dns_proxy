@@ -71,7 +71,7 @@ read_dns_message(int fd, int *message_len){
   dns_message = (unsigned char*)malloc(sizeof(unsigned char) * MESSAGE_SIZE_FLAG);
   assert(dns_message);
   for(i = MESSAGE_SIZE_FLAG; i > 0; i-= read_size){
-    if((read_size = read(fd, dns_message + read_size, i) == -1){
+    if((read_size = read(fd, dns_message + read_size, i)) == -1){
       perror("fail to read message size flag from socket");
       exit(EXIT_FAILURE);
     }
