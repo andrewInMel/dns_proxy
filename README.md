@@ -1,7 +1,7 @@
 # dns_proxy
 
 ## About
-This is a practice project that improves my undestanding of network layers, TCP protocol, multi-thread, DNS, socket programming & basic C programming. 
+This is a practice project that improves my understanding of network layers, TCP protocol, multi-thread, DNS, socket programming & basic C programming. 
 It aims to write a miniature DNS proxy server. Client sends query to the proxy server, which is forwarded to upstream server. Then, reply the client with reponse that 
 returned from upstream server.
 
@@ -37,15 +37,15 @@ Open another terminal, enter command < dig +tcp @127.0.0.1 -p 8053 AAAA {domain 
 If the domain has AAAA(IPv6) resource record it will return message with anwser, otherwise it will be no anwser in the message 
 
 ### Reference 
-firgue 1  
-![firgue 1] ()
+Firgue 1  
+![firgue 1](/images/1.jpg)
 
-firgue 2  
-![firgue 2] ()
+Firgue 2  
+![firgue 2](/images/2.jpeg)
 
-firgue 3  
-![firgue 3] ()
+Firgue 3  
+![firgue 3](/images/3.jpg)
 
-firgue 4  
-![firgue 4] ()
+Firgue 4  
+![firgue 4](/images/4.jpg)
 
