@@ -9,8 +9,9 @@ It aims to write a miniature DNS proxy server. The client sends the query to the
 * Error handling, it will check if the query and response is a well-formed DNS message. (see figure 2 below)
 * Multi-thread, the proxy server can process queries concurrently.
 * Caching, the proxy server stores up to 10 most recent active responses from the upstream server.
-* log file stores essential the information of all query & response
-* The connections between these parties are TCP connections other than usually UDP
+* log file stores essential the information of all query & response.
+* The connections between these parties are TCP connections other than usually UDP.
+* Bitwise operation is used to manipulate the binary data.
 
 ## Running Locally
 ### Prerequisite
